@@ -510,40 +510,56 @@ useEffect(() => {
   };
 
   const pickImage = async () => {
-    console.log('📸 Pick image button pressed!');
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      console.log('🔐 Permission result:', permissionResult);
       if (!permissionResult.granted) {
         Alert.alert('Permission required', 'Permission to access media library is required.');
         return;
       }
   
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'Images',
         quality: 1,
         base64: false,
       });
-      
-      console.log('📱 Image picker result:', result);
     
       if (!result.canceled) {
         const asset = result.assets[0];
-        console.log('🖼️ Selected asset:', asset);
         
         setImage(asset.uri);
         setLoading(true);
         
         await sendToOCR(asset);
-      } else {
-        console.log('❌ Image picker canceled');
       }
     } catch (error) {
-      console.error('🔥 Error in pickImage:', error);
+      console.error('Error in pickImage:', error);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
-  
+  const handleSubscriptionPurchase = async (plan) => {
+    try {
+      // Here you would integrate with your payment processor
+      // For now, we'll simulate a successful purchase
+      Alert.alert(
+        'Subscription Activated!',
+        `Your ${plan} subscription has been activated. You can now analyze conversations!`,
+        [
+          {
+            text: 'Great!',
+            onPress: async () => {
+              // Mark user as having subscription
+              await saveSubscriptionStatus(true);
+              // Now allow them to pick image
+              pickImage();
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Subscription purchase error:', error);
+      Alert.alert('Error', 'Failed to process subscription. Please try again.');
+    }
+  };
   const sendToOCR = async (asset) => {
     try {
       console.log('🚀 Calling OCR API:', `${API_BASE_URL}/ocr`);
@@ -604,21 +620,24 @@ useEffect(() => {
       }
       
       // Handle subscription error
-      if (response.status === 403) {
-        Alert.alert(
-          'Subscription Required',
-          'Please subscribe to use this feature',
-          [{ text: 'OK' }]
-        );
-        setLoading(false);
-        return;
+    // Handle subscription error
+if (response.status === 403) {
+  Alert.alert(
+    'Subscription Required',
+    'Please subscribe to use this feature',
+    [
+      { 
+        text: 'OK',
+        onPress: () => {
+          setLoading(false);
+          setImage(null);
+          setOcrError(false);
+        }
       }
-      
-      if (!data?.ParsedResults?.[0]) {
-        setOcrError(true);
-        setLoading(false);
-        return;
-      }
+    ]
+  );
+  return;
+}
   
       const result = data.ParsedResults[0];
       const parsedText = result.ParsedText?.trim() || 'No text found.';

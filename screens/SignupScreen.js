@@ -14,14 +14,18 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { signup } from '../lib/api';
-
-export default function SignupScreen() {    const router = useRouter(); // Add this line
+import { useAuth } from '../contexts/AuthContext';
+import { saveSubscriptionStatus, signup } from '../lib/api';
+export default function SignupScreen() {
+  const router = useRouter();
+  const { loginUser } = useAuth();  // Add this
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // ... rest of code
 
   const handleSignup = async () => {
     // Trim all inputs to remove spaces
@@ -41,19 +45,23 @@ export default function SignupScreen() {    const router = useRouter(); // Add t
   
     setLoading(true);
     try {
-      await signup(trimmedEmail, trimmedPassword, trimmedFullName);
+      const data = await signup(trimmedEmail, trimmedPassword, trimmedFullName);
       
-      Alert.alert(
-        'Success',
-        'Account created! Please login.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/login'),
-          },
-        ]
-      );
+      console.log('🔍 Signup response:', JSON.stringify(data, null, 2));
       
+      // Check if session exists
+      if (!data.session?.accessToken) {
+        throw new Error('No session returned from signup');
+      }
+      
+      /// Auto-login with the returned token
+loginUser(data.user, data.session.accessToken);
+
+// Mark new user as not having subscription
+await saveSubscriptionStatus(false);
+
+// Go straight to the app
+router.replace('/(tabs)');
     } catch (error) {
       console.log('❌ Signup error:', error);
       
@@ -64,7 +72,6 @@ export default function SignupScreen() {    const router = useRouter(); // Add t
       setLoading(false);
     }
   };
-
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient colors={['#1a1a1a', '#2d2d2d']} style={styles.gradient}>

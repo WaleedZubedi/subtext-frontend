@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   SafeAreaView,
@@ -12,11 +12,20 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-import { logout } from '../lib/api';
+import { getSubscriptionStatus, logout } from '../lib/api';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { user, logoutUser } = useAuth();
+  const { user, logoutUser, hasSubscription } = useAuth();
+const [subscriptionStatus, setSubscriptionStatus] = useState(false);
+
+useEffect(() => {
+  const checkSubscription = async () => {
+    const status = await getSubscriptionStatus();
+    setSubscriptionStatus(status);
+  };
+  checkSubscription();
+}, []);
   const [pressedItem, setPressedItem] = useState(null);
 
   const handleLogout = () => {
@@ -86,9 +95,12 @@ export default function SettingsScreen() {
       key: 'subscription',
       icon: '💎',
       title: 'Subscription',
-      subtitle: 'Premium • Active',
-      color: '#FFD700',
-      action: () => Alert.alert('Subscription', 'Test subscription is active')
+      subtitle: subscriptionStatus ? 'Premium • Active' : 'Free • Upgrade Available',
+      color: subscriptionStatus ? '#FFD700' : '#FF6B6B',
+      action: () => Alert.alert(
+        'Subscription Status', 
+        subscriptionStatus ? 'You have an active premium subscription!' : 'Upgrade to premium to unlock all features!'
+      )
     },
     {
       key: 'history',

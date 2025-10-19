@@ -1,7 +1,7 @@
-const API_BASE_URL = 'https://subtext-backend-f8ci.vercel.app/api';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -18,10 +18,12 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { useAuth } from '../../contexts/AuthContext';
+import { getToken } from '../../lib/api';
 import { styles } from './styles';
 
+const API_BASE_URL = 'https://subtext-backend-f8ci.vercel.app/api';
 const { width: screenWidth } = Dimensions.get('window');
-
 const StaticBackground = () => (
   <LinearGradient
     colors={['#1a1a1a', '#2d2d2d', '#1a1a1a']}
@@ -43,7 +45,7 @@ const MessageBubbleAnimation = () => {
   const analysisAnim = useRef(new Animated.Value(0)).current;
   const glitchAnim = useRef(new Animated.Value(0)).current;
   const scanLineAnim = useRef(new Animated.Value(0)).current;
-  const slideUpAnim = useRef(new Animated.Value(30)).current;
+  const slideDownAnim = useRef(new Animated.Value(-30)).current;
  
   const phases = [
     { 
@@ -96,7 +98,7 @@ const MessageBubbleAnimation = () => {
     analysisAnim.setValue(0);
     glitchAnim.setValue(0);
     scanLineAnim.setValue(0);
-    slideUpAnim.setValue(30);
+    slideDownAnim.setValue(-30);
   };
 
   const runPhaseAnimation = async (phaseIndex) => {
@@ -138,7 +140,7 @@ const MessageBubbleAnimation = () => {
 
     const revealAnimation = Animated.parallel([
       Animated.timing(revealAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
-      Animated.spring(slideUpAnim, { toValue: 0, tension: 100, friction: 8, useNativeDriver: true })
+      Animated.spring(slideDownAnim, { toValue: 0, tension: 100, friction: 8, useNativeDriver: true })
     ]);
 
     revealAnimation.start();
@@ -247,7 +249,7 @@ const MessageBubbleAnimation = () => {
           {
             opacity: revealAnim,
             transform: [
-              { translateY: slideUpAnim },
+              { translateY: slideDownAnim },
               { 
                 scale: revealAnim.interpolate({ 
                   inputRange: [0, 1], 
@@ -409,6 +411,9 @@ const ScanningAnimation = ({ imageUri }) => {
 };
 
 export default function App() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
+  
   const [image, setImage] = useState(null);
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -426,6 +431,18 @@ export default function App() {
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const menuSlideAnim = useRef(new Animated.Value(-300)).current;
   const logoScaleAnim = useRef(new Animated.Value(1)).current;
+
+  // Check auth on mount
+ // Check auth and onboarding on mount
+useEffect(() => {
+  const checkAuthStatus = async () => {
+    const token = await getToken();
+    if (!token && !isLoading) {
+      router.replace('/login');
+    }
+  };
+  checkAuthStatus();
+}, [isAuthenticated, isLoading]);
   
   useEffect(() => {
     Animated.loop(
@@ -493,25 +510,37 @@ export default function App() {
   };
 
   const pickImage = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission required', 'Permission to access media library is required.');
-      return;
-    }
+    console.log('📸 Pick image button pressed!');
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      console.log('🔐 Permission result:', permissionResult);
+      if (!permissionResult.granted) {
+        Alert.alert('Permission required', 'Permission to access media library is required.');
+        return;
+      }
   
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 1,
-      base64: false, // We don't need base64 anymore since backend handles it
-    });
-  
-    if (!result.canceled) {
-      const asset = result.assets[0];
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 1,
+        base64: false,
+      });
       
-      setImage(asset.uri);
-      setLoading(true);
-      
-      await sendToOCR(asset);
+      console.log('📱 Image picker result:', result);
+    
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        console.log('🖼️ Selected asset:', asset);
+        
+        setImage(asset.uri);
+        setLoading(true);
+        
+        await sendToOCR(asset);
+      } else {
+        console.log('❌ Image picker canceled');
+      }
+    } catch (error) {
+      console.error('🔥 Error in pickImage:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
   
@@ -519,35 +548,77 @@ export default function App() {
     try {
       console.log('🚀 Calling OCR API:', `${API_BASE_URL}/ocr`);
       
-      // Create FormData and append the image file
+      // Get auth token
+      const token = await getToken();
+      if (!token) {
+        Alert.alert('Authentication Required', 'Please login again');
+        router.replace('/login');
+        return;
+      }
+      
+      // Validate token format (basic check)
+      if (typeof token !== 'string' || token.length < 10) {
+        Alert.alert('Invalid Token', 'Please login again');
+        router.replace('/login');
+        return;
+      }
+      
       const formData = new FormData();
       formData.append('image', {
         uri: asset.uri,
-        type: asset.mimeType || 'image/jpeg', // fallback to jpeg if mimeType is not available
-        name: asset.fileName || 'image.jpg', // fallback filename
+        type: asset.mimeType || 'image/jpeg',
+        name: asset.fileName || 'image.jpg',
       });
       
       const response = await fetch(`${API_BASE_URL}/ocr`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`,
         },
         body: formData
       });
       
       console.log('📡 Response status:', response.status);
-      console.log('📡 Response headers:', response.headers);
       
       const responseText = await response.text();
       console.log('📄 Raw response:', responseText);
-      const data = JSON.parse(responseText).data
+      
+      const data = JSON.parse(responseText);
+      
+      // Handle authentication errors
+      if (response.status === 401) {
+        Alert.alert(
+          'Session Expired',
+          'Your session has expired. Please login again.',
+          [
+            { 
+              text: 'Login', 
+              onPress: () => {
+                router.replace('/login');
+              }
+            }
+          ]
+        );
+        setLoading(false);
+        return;
+      }
+      
+      // Handle subscription error
+      if (response.status === 403) {
+        Alert.alert(
+          'Subscription Required',
+          'Please subscribe to use this feature',
+          [{ text: 'OK' }]
+        );
+        setLoading(false);
+        return;
+      }
       
       if (!data?.ParsedResults?.[0]) {
         setOcrError(true);
         setLoading(false);
         return;
       }
-
   
       const result = data.ParsedResults[0];
       const parsedText = result.ParsedText?.trim() || 'No text found.';
@@ -562,11 +633,18 @@ export default function App() {
     } catch (error) {
       console.error('🔥 OCR Error details:', error);
       console.error('🔥 Error message:', error.message);
+      
+      // Handle auth errors
+      if (error.message.includes('authentication') || error.message.includes('token')) {
+        Alert.alert('Session Expired', 'Please login again');
+        router.replace('/login');
+        return;
+      }
+      
       setOcrError(true);
       setLoading(false);
     }
   };
-  
   
   const analyzeManualText = () => {
     if (!manualText.trim()) {
@@ -576,7 +654,6 @@ export default function App() {
     setLoading(true);
     processTextWithGPT(manualText);
   };
-
 
   const processTextWithGPT = async (rawText) => {
     try {
@@ -676,40 +753,28 @@ export default function App() {
     analysisAnim.setValue(0);
   };
 
-  // FIXED PARSING FUNCTION
   const parseAnalysis = () => {
     if (!analysis) return { intent: '', reply: '', behaviorType: 'Unknown', selectedMessages: [] };
     
     const content = analysis.combinedAnalysis;
     let intent = '', reply = '', behaviorType = 'Unknown', selectedMessages = analysis.selectedMessages || [];
     
-    console.log('Raw analysis content:', content);
-    
-    // More robust parsing - split by double asterisks and find sections
     const sections = content.split('**');
     
     for (let i = 0; i < sections.length; i++) {
       const section = sections[i].trim();
       
       if (section.toLowerCase().includes('hidden intent') && sections[i + 1]) {
-        // Get the content after "Hidden Intent:"
         intent = sections[i + 1].replace(/^:?\s*/, '').trim();
       } else if (section.toLowerCase().includes('behavior type') && sections[i + 1]) {
-        // Get the content after "Behavior Type:"
         behaviorType = sections[i + 1].replace(/^:?\s*/, '').trim();
       } else if (section.toLowerCase().includes('strategic reply') && sections[i + 1]) {
-        // Get the content after "Strategic Reply:"
         reply = sections[i + 1].replace(/^:?\s*/, '').trim();
       }
     }
     
-    // Clean up any remaining formatting
     intent = intent.replace(/^["']|["']$/g, '').trim();
     reply = reply.replace(/^["']|["']$/g, '').trim();
-    
-    console.log('Parsed intent:', intent);
-    console.log('Parsed behaviorType:', behaviorType);
-    console.log('Parsed reply:', reply);
     
     return { intent, reply, behaviorType, selectedMessages };
   };
@@ -749,6 +814,8 @@ export default function App() {
             { key: 'contact', icon: '📧', text: 'Contact Us', action: contactUs },
             { key: 'about', icon: 'ℹ️', text: 'About', action: showAbout },
             { key: 'privacy', icon: '🔒', text: 'Privacy Policy', action: showPrivacy },
+            { key: 'settings', icon: '⚙️', text: 'Settings', action: () => { router.push('/settings'); toggleMenu(); }},
+
             { key: 'rate', icon: '⭐', text: 'Rate Us', action: () => { Alert.alert('Rate Us', 'Enjoying SubText? Please rate us on the App Store!'); toggleMenu(); }}
           ].map(item => (
             <TouchableOpacity 
@@ -775,10 +842,12 @@ export default function App() {
       </Animated.View>
     </>
   );
-
   const renderHeader = () => (
     <View style={styles.headerContainer}>
       <View style={styles.headerTop}>
+        {/* TEMPORARY LOGOUT BUTTON */}
+       
+        
         <TouchableOpacity 
           style={[styles.burgerButtonMain, burgerPressed && styles.burgerButtonMain]} 
           onPress={toggleMenu}
@@ -813,7 +882,14 @@ export default function App() {
         
         <View style={styles.actionButtons}>
           <Animated.View style={{ transform: [{ scale: pulseAnim }, { translateY: bounceAnim }] }}>
-            <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
+            <TouchableOpacity 
+              style={[styles.uploadButton, { backgroundColor: 'transparent' }]} 
+              onPress={pickImage}
+              onPressIn={() => console.log('🔘 Button pressed in')}
+              onPressOut={() => console.log('🔘 Button pressed out')}
+              activeOpacity={0.8}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <LinearGradient colors={['#FF6B6B', '#FF5252']} style={styles.uploadGradient} start={{x: 0, y: 0}} end={{x: 1, y: 1}}>
                 <View style={styles.cameraIcon}>
                   <View style={styles.cameraBody} />
@@ -855,7 +931,6 @@ export default function App() {
   const renderImageScan = () => {
     if (loading) return <ScanningAnimation imageUri={image} />;
 
-    // Show error state with try again button
     if (ocrError) {
       return (
         <View style={{
@@ -954,7 +1029,6 @@ export default function App() {
     );
   };
   
-  // COMPACT ANALYSIS RESULTS WITH LINE LIMITS
   const renderAnalysisResults = () => {
     const { intent, reply, behaviorType, selectedMessages } = parseAnalysis();
     const confidenceLevel = 96;
@@ -962,7 +1036,6 @@ export default function App() {
     return (
       <Animated.View style={[styles.analysisContainer, { opacity: analysisAnim, transform: [{ translateY: analysisAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }] }]}>
         
-        {/* HIDDEN INTENT CARD - COMPACT */}
         <View style={{
           backgroundColor: '#0a0a0a',
           borderRadius: 16,
@@ -1055,7 +1128,6 @@ export default function App() {
           </Text>
         </View>
 
-        {/* STRATEGIC REPLY CARD - COMPACT */}
         {reply && (
           <View style={{
             backgroundColor: '#0a0a0a',
@@ -1152,6 +1224,18 @@ export default function App() {
       </Animated.View>
     );
   };
+
+  // Show loading screen while checking auth
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StaticBackground />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: '#fff', fontSize: 18 }}>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>

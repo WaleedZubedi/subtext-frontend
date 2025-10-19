@@ -12,21 +12,33 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-import { getSubscriptionStatus, logout } from '../lib/api';
+import { getToken, logout } from '../lib/api';
 
+const API_BASE_URL = 'https://subtext-backend-f8ci.vercel.app/api';
 export default function SettingsScreen() {
   const router = useRouter();
   const { user, logoutUser, hasSubscription } = useAuth();
-const [subscriptionStatus, setSubscriptionStatus] = useState(false);
-
-useEffect(() => {
-  const checkSubscription = async () => {
-    const status = await getSubscriptionStatus();
-    setSubscriptionStatus(status);
-  };
-  checkSubscription();
-}, []);
+  const [subscriptionStatus, setSubscriptionStatus] = useState(false);
   const [pressedItem, setPressedItem] = useState(null);
+
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      try {
+        const token = await getToken();
+        const response = await fetch(`${API_BASE_URL}/subscription/status`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const data = await response.json();
+        setSubscriptionStatus(data.hasSubscription);
+      } catch (error) {
+        console.error('Failed to fetch subscription:', error);
+        setSubscriptionStatus(false);
+      }
+    };
+    fetchSubscription();
+  }, []);
 
   const handleLogout = () => {
     Alert.alert(
@@ -85,6 +97,7 @@ useEffect(() => {
           await SecureStore.deleteItemAsync('userToken');
           await SecureStore.deleteItemAsync('userData');
           await SecureStore.deleteItemAsync('hasSeenOnboarding');
+          await SecureStore.deleteItemAsync('hasSubscription');
           Alert.alert('Cleared!', 'All data wiped. Restart app.');
         }
       }

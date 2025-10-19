@@ -620,24 +620,52 @@ useEffect(() => {
       }
       
       // Handle subscription error
-    // Handle subscription error
-if (response.status === 403) {
-  Alert.alert(
-    'Subscription Required',
-    'Please subscribe to use this feature',
-    [
-      { 
-        text: 'OK',
-        onPress: () => {
-          setLoading(false);
-          setImage(null);
-          setOcrError(false);
-        }
+      if (response.status === 403) {
+        Alert.alert(
+          'Subscription Required',
+          'You need a premium subscription to analyze conversations. Would you like to subscribe?',
+          [
+            { 
+              text: 'Cancel',
+              style: 'cancel',
+              onPress: () => {
+                setLoading(false);
+                setImage(null);
+                setOcrError(false);
+              }
+            },
+            {
+              text: 'Subscribe',
+              onPress: () => {
+                setLoading(false);
+                setImage(null);
+                setOcrError(false);
+                // Show subscription options
+                Alert.alert(
+                  'Subscribe to Premium',
+                  'Choose your subscription plan:',
+                  [
+                    {
+                      text: 'Monthly - $9.99',
+                      onPress: () => handleSubscriptionPurchase('monthly')
+                    },
+                    {
+                      text: 'Yearly - $99.99 (Save 17%)',
+                      onPress: () => handleSubscriptionPurchase('yearly')
+                    },
+                    {
+                      text: 'Cancel',
+                      style: 'cancel'
+                    }
+                  ]
+                );
+              }
+            }
+          ]
+        );
+        setLoading(false);
+        return;
       }
-    ]
-  );
-  return;
-}
   
       const result = data.ParsedResults[0];
       const parsedText = result.ParsedText?.trim() || 'No text found.';

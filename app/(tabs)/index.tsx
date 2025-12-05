@@ -680,6 +680,9 @@ useEffect(() => {
     } catch (error) {
       console.error('🔥 OCR Error details:', error);
       console.error('🔥 Error message:', error.message);
+      console.log('==========================================');
+      console.log('🔥 Error details:', JSON.stringify(error, null, 2));
+      console.log('==========================================');
       
       // Handle auth errors
       if (error.message.includes('authentication') || error.message.includes('token')) {
@@ -704,60 +707,40 @@ useEffect(() => {
 
   const processTextWithGPT = async (rawText) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/extract`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ rawText }),
-      });
-  
-      const data = await response.json();
+      console.log('==========================================');
+      console.log('📝 RAW TEXT FROM OCR:', rawText);
+      console.log('==========================================');
       
-      if (!data.choices?.[0]?.message?.content) {
-        analyzeText([rawText]);
-        return;
-      }
-  
-      const responseContent = data.choices[0].message.content;
-      const startMarker = 'EXTRACTED_MESSAGES_START';
-      const endMarker = 'EXTRACTED_MESSAGES_END';
-      
-      const startIndex = responseContent.indexOf(startMarker);
-      const endIndex = responseContent.indexOf(endMarker);
-      
-      if (startIndex === -1 || endIndex === -1) {
-        analyzeText([rawText]);
-        return;
-      }
-      
-      const messagesSection = responseContent.substring(startIndex + startMarker.length, endIndex);
-      
-      if (!messagesSection || messagesSection.trim().length === 0) {
-        analyzeText([rawText]);
-        return;
-      }
-      
-      const senderMessages = messagesSection
-        .trim()
+      // Split the raw text into individual messages
+      const senderMessages = rawText
         .split('\n')
         .map(line => line.trim())
-        .filter(line => line.length > 3 && !line.includes('[') && !line.includes(']'));
+        .filter(line => line.length > 3);
+  
+      console.log('==========================================');
+      console.log('✅ MESSAGES BEING SENT TO ANALYSIS:', senderMessages);
+      console.log('==========================================');
   
       if (senderMessages.length === 0) {
-        analyzeText([rawText]);
+        Alert.alert('Error', 'No messages found to analyze');
+        setLoading(false);
         return;
       }
   
       analyzeText(senderMessages);
     } catch (error) {
       console.error('Processing Error:', error);
-      analyzeText([rawText]);
+      Alert.alert('Error', 'Failed to process text');
+      setLoading(false);
     }
   };
 
   const analyzeText = async (senderMessages) => {
     try {
+      console.log('==========================================');
+      console.log('🧠 ANALYZING THESE MESSAGES:', senderMessages);
+      console.log('==========================================');
+      
       const response = await fetch(`${API_BASE_URL}/analyze`, {
         method: 'POST',
         headers: {
@@ -768,7 +751,15 @@ useEffect(() => {
   
       const data = await response.json();
       
+      console.log('==========================================');
+      console.log('📊 ANALYSIS RESPONSE:', JSON.stringify(data, null, 2));
+      console.log('==========================================');
+      
       if (data.choices?.[0]?.message?.content) {
+        console.log('==========================================');
+        console.log('✅ FINAL ANALYSIS:', data.choices[0].message.content);
+        console.log('==========================================');
+        
         setAnalysis({ 
           combinedAnalysis: data.choices[0].message.content,
           selectedMessages: senderMessages

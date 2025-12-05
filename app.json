@@ -1,27 +1,42 @@
 {
   "expo": {
-    "name": "OCRtester",
-    "slug": "OCRtester",
+    "name": "SubText",
+    "slug": "subtext-ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "ocrtester",
-    "userInterfaceStyle": "automatic",
+    "scheme": "subtext",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "primaryColor": "#000000",
+    "backgroundColor": "#000000",
+    "description": "AI-powered conversation analysis. Decode hidden intentions and manipulation tactics in text messages.",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.subtext.ai"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.subtext.ai"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "SubText - AI Conversation Analysis",
+      "shortName": "SubText",
+      "description": "Decode hidden intentions in conversations with AI",
+      "backgroundColor": "#000000",
+      "themeColor": "#6200ea",
+      "lang": "en",
+      "scope": "/",
+      "startUrl": "/",
+      "display": "standalone",
+      "orientation": "portrait"
     },
     "plugins": [
       "expo-router",
